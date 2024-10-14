@@ -1,3 +1,8 @@
+# Laden der benötigten Bibliotheken
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
 # Daten einlesen
 data_pop <- read.csv("/Users/emir/Downloads/pop.csv")
 data_spending <- read.csv("/Users/emir/Downloads/householdSpending.csv")
@@ -44,8 +49,8 @@ data_internet_access$Year <- as.numeric(data_internet_access$Year)
 data_internet_access <- data_internet_access %>%
   filter(Year >= 2000 & Year <= 2020)
 
-# Datensätze zusammenführen
-master <- long_pop_df %>% 
+# Datensätze zusammenführen und bereinigen
+master <- long_pop_df %>%
   inner_join(data_spending, by = c("LOCATION", "Year"))
 
 master <- master %>%
@@ -77,3 +82,180 @@ remove_outliers <- function(df, cols = names(df)) {
 
 master <- remove_outliers(master, c('Internet_Access', 'Household_Spending'))
 summary(master)
+
+# Visualisierung der Datenpunkte
+# Daten gruppieren nach Jahr
+grouped_data <- master %>%
+  group_by(Year) %>%
+  summarise(Population = sum(Population),
+            Household_Spending = sum(Household_Spending),
+            Internet_Access = mean(Internet_Access))
+
+# Bevölkerung über die Zeit plotten
+ggplot(data = grouped_data, aes(x = Year, y = Population)) +
+  geom_line(color = "blue") +
+  geom_point(color = "red") +
+  labs(title = "Bevölkerung über die Zeit", x = "Jahr", y = "Bevölkerung") +
+  theme_minimal()
+
+# Internetzugang über die Zeit plotten
+ggplot(data = grouped_data, aes(x = Year, y = Internet_Access)) +
+  geom_line(color = "green") +
+  geom_point(color = "darkgreen") +
+  labs(title = "Internetzugang über die Zeit", x = "Jahr", y = "Internetzugang (%)") +
+  theme_minimal()
+
+# Haushaltsausgaben über die Zeit plotten
+ggplot(data = grouped_data, aes(x = Year, y = Household_Spending)) +
+  geom_line(color = "red") +
+  geom_point(color = "blue") +
+  labs(title = "Haushaltsausgaben über die Zeit", x = "Jahr", y = "Haushaltsausgaben") +
+  theme_minimal()
+
+# Korrelationen untersuchen
+# Korrelation zwischen Internetzugang und Haushaltsausgaben über die Zeit
+correlation_over_time <- master %>%
+  group_by(Year) %>%
+  summarize(correlation = cor(Internet_Access, 
+                              Household_Spending, use = "complete.obs"))
+
+# Korrelation über die Zeit plotten
+ggplot(correlation_over_time, aes(x = Year, y = correlation)) +
+  geom_line(color = "blue") +
+  geom_point(color = "blue") +
+  labs(title = "Korrelation zwischen Internetzugang und Haushaltsausgaben über die Zeit",
+       x = "Jahr", y = "Korrelation") +
+  theme_minimal()
+
+# Korrelation zwischen Internetzugang und Haushaltsausgaben nach Land
+correlation_between_countries <- master %>%
+  group_by(LOCATION) %>%
+  summarize(correlation = cor(Internet_Access, 
+                              Household_Spending, use = "complete.obs"))
+
+# Korrelation nach Land plotten
+ggplot(correlation_between_countries, aes(x = reorder(LOCATION, correlation), y = correlation)) +
+  geom_point(color = "red") +
+  coord_flip() +
+  labs(title = "Korrelation zwischen Internetzugang und Haushaltsausgaben nach Land",
+       x = "Land", y = "Korrelation") +
+  theme_minimal()
+
+# Prognosen für die nächsten zwei Jahre
+# Aktuelle Jahre filtern (letzte 6 Jahre)
+recent_years <- master %>%
+  filter(Year >= 2015)
+
+# Lineare Regressionsmodelle erstellen
+population_model <- lm(Population ~ Year, data = recent_years)
+internet_model <- lm(Internet_Access ~ Year, data = recent_years)
+spending_model <- lm(Household_Spending ~ Year, data = recent_years)
+
+# Vorhersagen für 2021 und 2022 erstellen
+future_years <- data.frame(Year = c(2021, 2022))
+
+future_years$Population <- predict(population_model, newdata = future_years)
+future_years$Internet_Access <- predict(internet_model, newdata = future_years)
+future_years$Household_Spending <- predict(spending_model, newdata = future_years)
+
+# Daten kombinieren
+extended_df <- bind_rows(master, future_years)
+
+grouped_data <- extended_df %>%
+  group_by(Year) %>%
+  summarise(Population = sum(Population),
+            Household_Spending = sum(Household_Spending),
+            Internet_Access = mean(Internet_Access))
+
+# Bevölkerung mit Prognosen plotten
+ggplot(data = grouped_data, aes(x = Year, y = Population)) +
+  geom_line(color = "blue") +
+  geom_point(color = "blue") +
+  geom_line(data = future_years, aes(x = Year, y = Population),
+            color = "red", linetype = "dashed") +
+  geom_point(data = future_years, aes(x = Year, y = Population),
+             color = "red") +
+  labs(title = "Bevölkerung über die Zeit (mit Prognosen)", 
+       x = "Jahr", y = "Bevölkerung") +
+  theme_minimal()
+
+# Internetzugang mit Prognosen plotten
+ggplot(data = grouped_data, aes(x = Year, y = Internet_Access)) +
+  geom_line(color = "green") +
+  geom_point(color = "green") +
+  geom_line(data = future_years, aes(x = Year, y = Internet_Access), 
+            color = "red", linetype = "dashed") +
+  geom_point(data = future_years, aes(x = Year, y = Internet_Access),
+             color = "red") +
+  labs(title = "Internetzugang über die Zeit (mit Prognosen)", 
+       x = "Jahr", y = "Internetzugang (%)") +
+  theme_minimal()
+
+# Haushaltsausgaben mit Prognosen plotten
+ggplot(data = grouped_data, aes(x = Year, y = Household_Spending)) +
+  geom_line(color = "red") +
+  geom_point(color = "red") +
+  geom_line(data = future_years, aes(x = Year, y = Household_Spending), 
+            color = "blue", linetype = "dashed") +
+  geom_point(data = future_years, aes(x = Year, y = Household_Spending), 
+             color = "blue") +
+  labs(title = "Haushaltsausgaben über die Zeit (mit Prognosen)", 
+       x = "Jahr", y = "Haushaltsausgaben") +
+  theme_minimal()
+
+# Preisvorschlag erstellen
+# Daten nach Land gruppieren und Haushalte mit Internet berechnen
+grouped_data <- master %>%
+  group_by(LOCATION) %>%
+  summarise(Population = mean(Population),
+            Internet_Access = mean(Internet_Access),
+            Household_Spending = mean(Household_Spending))
+
+# Durchschnittliche Haushaltsgröße annehmen
+avg_household_size <- 2.5
+
+# Haushalte mit Internetzugang berechnen
+grouped_data <- grouped_data %>%
+  mutate(
+    Households_With_Internet = (Population * Internet_Access / 100) / avg_household_size
+  )
+
+# Vorgeschlagenen Preis pro Land berechnen
+price_germany <- 12  # in Euro pro Jahr
+
+household_spending_germany <- grouped_data %>%
+  filter(LOCATION == "DEU") %>%
+  select(Household_Spending) %>%
+  pull()
+
+grouped_data <- grouped_data %>%
+  mutate(
+    Proposed_Price = round(price_germany * (Household_Spending / household_spending_germany), 2)
+  )
+
+# Vorgeschlagene Preise plotten
+ggplot(grouped_data, aes(x = reorder(LOCATION, -Proposed_Price), 
+                         y = Proposed_Price)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(title = "Vorgeschlagener Preis nach Land",
+       y = "Vorgeschlagener Preis (€)", x = "Land") +
+  theme_minimal() +
+  coord_flip()
+
+# Länderempfehlung
+# Top 10 Länder identifizieren
+data_ranked <- grouped_data %>%
+  arrange(desc(Households_With_Internet), desc(Household_Spending))
+
+top_countries <- data_ranked %>%
+  slice(1:10) %>%
+  select(LOCATION, Population, Internet_Access,
+         Households_With_Internet, Household_Spending)
+
+# Top 10 Länder plotten
+ggplot(top_countries, aes(x = reorder(LOCATION, -Households_With_Internet), y = Households_With_Internet)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(title = "Top 10 Länder für das Geometry-Companion-Angebot",
+       x = "Land", y = "Haushalte mit Internetzugang") +
+  theme_minimal() +
+  coord_flip()
