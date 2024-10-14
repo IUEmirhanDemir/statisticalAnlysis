@@ -1,0 +1,79 @@
+# Daten einlesen
+data_pop <- read.csv("/Users/emir/Downloads/pop.csv")
+data_spending <- read.csv("/Users/emir/Downloads/householdSpending.csv")
+data_internet_access <- read.csv("/Users/emir/Downloads/internetAccess.csv")
+
+# Populationsdaten vorbereiten
+data_pop <- data_pop %>%
+  select(-Country.Name, -Series.Name, -Series.Code)
+
+long_pop_df <- data_pop %>%
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "Year",
+    values_to = "Population"
+  )
+
+# 'X' Präfix von 'Year' entfernen und in numerisch konvertieren
+long_pop_df$Year <- as.numeric(gsub(".*?(\\d{4}).*", "\\1", long_pop_df$Year))
+long_pop_df <- long_pop_df %>%
+  filter(Year >= 2000 & Year <= 2020)
+
+names(long_pop_df)[1] <- "LOCATION"
+
+# Haushaltsausgaben-Daten vorbereiten
+data_spending <- data_spending %>%
+  select(LOCATION, TIME_PERIOD, OBS_VALUE)
+
+names(data_spending)[3] <- "Household_Spending"
+names(data_spending)[2] <- "Year"
+
+data_spending$Year <- as.numeric(data_spending$Year)
+data_spending <- data_spending %>%
+  filter(Year >= 2000 & Year <= 2020)
+
+# Internetzugang-Daten vorbereiten
+data_internet_access <- data_internet_access %>%
+  select(REF_AREA, TIME_PERIOD, OBS_VALUE)
+
+names(data_internet_access)[3] <- "Internet_Access"
+names(data_internet_access)[2] <- "Year"
+names(data_internet_access)[1] <- "LOCATION"
+
+data_internet_access$Year <- as.numeric(data_internet_access$Year)
+data_internet_access <- data_internet_access %>%
+  filter(Year >= 2000 & Year <= 2020)
+
+# Datensätze zusammenführen
+master <- long_pop_df %>% 
+  inner_join(data_spending, by = c("LOCATION", "Year"))
+
+master <- master %>%
+  inner_join(data_internet_access, by = c("LOCATION", "Year"))
+
+# Datenbereinigung
+master <- master %>%
+  filter(Household_Spending > 0)
+master$Population <- as.numeric(master$Population)
+
+# Ausreißer entfernen
+outliers <- function(x) {
+  Q1 <- quantile(x, probs = .25, na.rm = TRUE)
+  Q3 <- quantile(x, probs = .75, na.rm = TRUE)
+  iqr <- Q3 - Q1
+  
+  upper_limit <- Q3 + (iqr * 1.5)
+  lower_limit <- Q1 - (iqr * 1.5)
+  
+  x > upper_limit | x < lower_limit
+}
+
+remove_outliers <- function(df, cols = names(df)) {
+  for (col in cols) {
+    df <- df[!outliers(df[[col]]), ]
+  }
+  df
+}
+
+master <- remove_outliers(master, c('Internet_Access', 'Household_Spending'))
+summary(master)
